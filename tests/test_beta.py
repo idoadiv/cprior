@@ -39,6 +39,7 @@ def test_beta_equal_params_integer():
     assert beta_cprior(100, 90, 100, 90) == approx(0.5)
 
 def test_beta_huge_numbers():
+    # See comment in beta.cpp
     assert isnan(beta_cprior(8000000, 118000000, 16000000, 285000000))
 
 

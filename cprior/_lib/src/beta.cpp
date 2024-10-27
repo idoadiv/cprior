@@ -15,6 +15,13 @@ double betaln(double a, double b)
   return std::lgamma(a) + std::lgamma(b) - std::lgamma(a + b);
 }
 
+
+/*
+  EXPLAINING c == 0 -> NaN
+  The exponent is never mathematically zero, but for very small numbers which can't be represented by a long double we may still get 0.
+  In case we got 0, this means that a very small number was rounded to zero, and we can't compute the result.
+*/
+
 double beta_terminating_a0(int a0, double b0, double a1, double b1,
   double err=1e-15)
 {
@@ -23,6 +30,7 @@ double beta_terminating_a0(int a0, double b0, double a1, double b1,
   const long double ab11 = a1 + b0 + b1 - 1;
 
   c = std::exp((long double)(betaln(a1 + a0 - 1, b0 + b1) - betaln(a1, b1) - betaln(a0, b0)));
+  // see "EXPLAINING c == 0" in the top of the file
   if (c == 0)
     return nan("");
 
@@ -48,6 +56,7 @@ double beta_terminating_a1(double a0, double b0, int a1, double b1,
   const long double ab01 = a0 + b0 + b1 - 1;
 
   c = std::exp((long double)(betaln(a0 + a1 - 1, b0 + b1) - betaln(a1, b1) - betaln(a0, b0)));
+  // see "EXPLAINING c == 0" in the top of the file
   if (c == 0)
     return nan("");
 
@@ -72,6 +81,7 @@ double beta_terminating_b0(double a0, int b0, double a1, double b1,
   const long double ab11 = b1 + a0 + a1 - 1;
 
   c = std::exp((long double)(betaln(b1 + b0 - 1, a0 + a1) - betaln(a1, b1) - betaln(a0, b0)));
+  // see "EXPLAINING c == 0" in the top of the file
   if (c == 0)
     return nan("");
 
@@ -96,6 +106,7 @@ double beta_terminating_b1(double a0, double b0, double a1, int b1,
   const long double ab01 = b0 + a0 + a1 - 1;
 
   c = std::exp((long double)(betaln(b0 + b1 - 1, a0 + a1) - betaln(a1, b1) - betaln(a0, b0)));
+  // see "EXPLAINING c == 0" in the top of the file
   if (c == 0)
     return nan("");
 
@@ -123,6 +134,7 @@ double beta_3f2(double a0, double b0, double a1, double b1, double err=1e-15)
   long double c, s, sp, t;
 
   c = std::exp((long double)(betaln(a0+a1,bb)-(std::log(b0) + betaln(a0,b0) + betaln(a1,b1))));
+  // see "EXPLAINING c == 0" in the top of the file
   if (c == 0)
     return nan("");
 
