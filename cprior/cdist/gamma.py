@@ -908,7 +908,7 @@ class GammaMVTest(BayesMVTest):
 
         Returns
         -------
-        expected_loss_relative : float
+        expected_lift_relative : float
         """
         check_mv_method(method=method, method_options=("exact", "MC"),
                         control=control, variant=variant,
@@ -1004,7 +1004,7 @@ class GammaMVTest(BayesMVTest):
     def expected_lift_relative_vs_all(self, method="MLHS", control="A",
                                       variant="B", mlhs_samples=1000):
         r"""
-        Compute the expected relative loss against all variations. For example,
+        Compute the expected relative lift against all variations. For example,
         given variants "A", "B", "C" and "D", and choosing variant="B",
         we compute :math:`\mathrm{E}[(\max(A, C, D) - B) / B]`.
 

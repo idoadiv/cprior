@@ -1627,6 +1627,67 @@ class NormalInverseGammaMVTest(BayesMVTest):
 
             return ((x0 - x1) / x1).mean(), ((sig20 - sig21) / sig21).mean()
 
+    def expected_lift_relative(self, method="exact", control="A", variant="B"):
+        r"""
+        Compute expected relative lift for choosing a variant. This can be seen
+        as the negative expected relative improvement or uplift, i.e.,
+        :math:`\mathrm{E}[(variant - control) / control]`.
+
+        Parameters
+        ----------
+        method : str (default="exact")
+            The method of computation. Options are "exact" and "MC".
+
+        control : str (default="A")
+            The control variant.
+
+        variant : str (default="B")
+            The tested variant.
+
+        Returns
+        -------
+        expected_lift_relative : tuple of floats
+
+        Notes
+        -----
+        Method "exact" uses an approximation of :math:`E[1/X]` where
+        :math:`X` follows a Student's t-distribution.
+        """
+        check_mv_method(method=method, method_options=("exact", "MC"),
+                        control=control, variant=variant,
+                        variants=self.models.keys())
+
+        model_control = self.models[control]
+        model_variant = self.models[variant]
+
+        if method == "exact":
+            mu0 = model_control.loc_posterior
+            a0 = model_control.shape_posterior
+            b0 = model_control.scale_posterior
+
+            mu1 = model_variant.loc_posterior
+            a1 = model_variant.shape_posterior
+            b1 = model_variant.scale_posterior
+
+            sig20 = model_control.var()[0]
+            sig21 = model_variant.var()[0]
+
+            # mean using asymptotic normal approximation
+            elr_mean = mu1 / mu0 + sig20 * mu1 / mu0 ** 3 - 1
+
+            # variance
+            elr_var = b1 / b0 * (a0 -1) / a1 - 1
+
+            return elr_mean, elr_var
+        else:
+            data_0 = model_control.rvs(self.simulations, self.random_state)
+            data_1 = model_variant.rvs(self.simulations, self.random_state)
+
+            x0, sig20 = data_0[:, 0], data_0[:, 1]
+            x1, sig21 = data_1[:, 0], data_1[:, 1]
+
+            return ((x1 - x0) / x0).mean(), ((sig21 - sig20) / sig20).mean()
+
     def expected_loss_relative_vs_all(self, method="quad", control="A",
                                       variant="B", mlhs_samples=1000):
         r"""
@@ -1751,6 +1812,132 @@ class NormalInverseGammaMVTest(BayesMVTest):
                         axis=0) for i in range(n)], axis=0).mean() * xr - 1
 
                 return elr_mean, elr_var
+
+    def expected_lift_relative_vs_all(self, method="quad", control="A",
+                                      variant="B", mlhs_samples=1000):
+        r"""
+        Compute the expected relative lift against all variations. For example,
+        given variants "A", "B", "C" and "D", and choosing variant="B",
+        we compute :math:`\mathrm{E}[(\max(A, C, D) - B) / B]`.
+
+        Parameters
+        ----------
+        method : str (default="quad")
+            The method of computation. Options are "MC" (Monte Carlo),
+            "MLHS" (Monte Carlo + Median Latin Hypercube Sampling) and "quad"
+            (numerical integration).
+
+        variant : str (default="B")
+            The chosen variant.
+
+        mlhs_samples : int (default=1000)
+            Number of samples for MLHS method.
+
+        Returns
+        -------
+        expected_loss_relative_vs_all : tuple of floats
+        """
+        check_mv_method(method=method, method_options=("MC", "MLHS", "quad"),
+                        control=None, variant=variant,
+                        variants=self.models.keys())
+
+        # exclude variant
+        variants = list(self.models.keys())
+        variants.remove(variant)
+
+        if method == "MC":
+            # generate samples from all models in parallel
+            xvariant = self.models[variant].rvs(self.simulations,
+                                                self.random_state)
+
+            pool = Pool(processes=self.n_jobs)
+            processes = [pool.apply_async(self._rvs, args=(v, ))
+                         for v in variants]
+            xall = [p.get() for p in processes]
+            maxall = np.maximum.reduce(xall)
+
+            return (xvariant / maxall).mean(axis=0) - 1
+        else:
+            # prepare parameters
+            variant_params = [(self.models[v].loc_posterior,
+                              self.models[v].variance_scale_posterior,
+                              self.models[v].shape_posterior,
+                              self.models[v].scale_posterior)
+                              for v in variants]
+
+            mu = self.models[variant].loc_posterior
+            la = self.models[variant].variance_scale_posterior
+            a = self.models[variant].shape_posterior
+            b = self.models[variant].scale_posterior
+
+            if method == "quad":
+                max_ig = np.max([stats.invgamma(
+                    a=self.models[v].shape_posterior,
+                    scale=self.models[v].scale_posterior).ppf(0.99999999)
+                    for v in variants])
+
+                t_ppfs = [stats.t(
+                    df=2*self.models[v].shape_posterior,
+                    loc=self.models[v].loc_posterior,
+                    scale=np.sqrt(
+                        self.models[v].scale_posterior /
+                        self.models[v].shape_posterior /
+                        self.models[v].variance_scale_posterior)).ppf(
+                    [0.00000001, 0.99999999]) for v in variants]
+
+                min_t = np.min([q[0] for q in t_ppfs])
+                max_t = np.max([q[1] for q in t_ppfs])
+
+                # mean
+                e_max = integrate.quad(func=func_mv_elr_mean, a=min_t,
+                                       b=max_t, args=(variant_params))[0]
+
+                e_inv_x = (1 + self.models[variant].var()[0] / mu ** 2) / mu
+
+                elr_mean = e_max * e_inv_x - 1
+
+                # variance
+                e_max = integrate.quad(func=func_mv_elr_var, a=0, b=max_ig,
+                                       args=(variant_params))[0]
+                e_inv_x = b / a
+
+                elr_variance = e_max * e_inv_x - 1
+
+                return elr_mean, elr_variance
+            else:
+                raise NotImplementedError(f'Non-supportive method {method} for Normal Disturbtion')
+                # r = np.arange(1, mlhs_samples + 1)
+                # np.random.shuffle(r)
+                # r = (r - 0.5) / mlhs_samples
+                # r = r[..., np.newaxis]
+
+                # n = len(variant_params)
+                # variant_params.append((mu, la, a, b))
+                # uu, ll, aa, bb = map(np.array, zip(*variant_params))
+                # vv = 2 * aa
+                # ss = np.sqrt(bb / aa / ll)
+
+                # # mean
+                # xx = stats.t(df=vv, loc=uu, scale=ss).ppf(r)
+                # xr = (1. / xx[:, -1]).mean()
+
+                # elr_mean = np.sum(
+                #     xx[:, :-1].T * [np.prod([
+                #         special.stdtr(vv[j], (xx[:, i] - uu[j]) / ss[j])
+                #         for j in range(n) if j != i],
+                #         axis=0) for i in range(n)], axis=0).mean() * xr - 1
+
+                # # variance
+                # xx = stats.invgamma(a=aa, scale=bb).ppf(r)
+                # xr = (1. / xx[:, -1]).mean()
+
+                # elr_var = np.sum(
+                #     xx[:, :-1].T * [np.prod([
+                #         special.gammaincc(aa[j], bb[j] / xx[:, i])
+                #         for j in range(n) if j != i],
+                #         axis=0) for i in range(n)], axis=0).mean() * xr - 1
+
+                # return elr_mean, elr_var
 
     def expected_loss_relative_ci(self, method="MC", control="A", variant="B",
                                   interval_length=0.9, ci_method="ETI"):
