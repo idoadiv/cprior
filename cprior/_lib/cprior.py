@@ -16,13 +16,17 @@ from ctypes import c_double, c_int
 libabspath = os.path.dirname(os.path.abspath(__file__))
 system_os = platform.system()
 linux_os = (system_os == "Linux" or "CYGWIN" in system_os)
+processor = platform.processor()
 
 if linux_os:
     cprior = npct.load_library("_cprior.so", libabspath)
 elif system_os == "Windows":
     cprior = npct.load_library("cprior.dll", libabspath)
 elif system_os == "Darwin":
-    cprior = npct.load_library("cprior.dylib", libabspath)
+    if processor == 'arm':
+        cprior = npct.load_library("cprior_arm.dylib", libabspath)
+    else:
+        cprior = npct.load_library("cprior.dylib", libabspath)
 
 
 cprior.cpp_beta_cprior.restype = c_double

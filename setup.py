@@ -36,13 +36,17 @@ class PyTest(TestCommand):
 
 system_os = platform.system()
 linux_os = (system_os == "Linux" or "CYGWIN" in system_os)
+processor = platform.processor()
 
 if linux_os:
     cprior = "_cprior.so"
 elif system_os == "Windows":
     cprior = "cprior.dll"
 elif system_os == "Darwin":
-    cprior = "cprior.dylib"
+    if processor == 'arm':
+        cprior = "cprior_arm.dylib"
+    else:
+        cprior = "cprior.dylib"
 else:
     raise RuntimeError("Unexpected system {}.".format(system_os))
 
