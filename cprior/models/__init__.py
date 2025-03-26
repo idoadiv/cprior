@@ -30,6 +30,8 @@ from .poisson import PoissonABTest
 from .poisson import PoissonModel
 from .poisson import PoissonMVTest
 
+from .poisson_adjusted import PoissonAdjustedModel
+
 from .uniform import UniformABTest
 from .uniform import UniformModel
 from .uniform import UniformMVTest
@@ -58,6 +60,7 @@ __all__ = ['BernoulliABTest',
            'NormalMVTest',
            'PoissonABTest',
            'PoissonModel',
+           'PoissonAdjustedModel',
            'PoissonMVTest',
            'UniformABTest',
            'UniformModel',
