@@ -924,7 +924,7 @@ class GammaMVTest(BayesMVTest):
             a1 = model_variant.shape_posterior
             b1 = model_variant.rate_posterior
 
-            return b0 / b1 * (a1 - 1) / a0 - 1
+            return (b0 / b1) * (a1 / a0) - 1
         else:
             x0 = model_control.rvs(self.simulations, self.random_state)
             x1 = model_variant.rvs(self.simulations, self.random_state)
@@ -1004,9 +1004,9 @@ class GammaMVTest(BayesMVTest):
     def expected_lift_relative_vs_all(self, method="MLHS", control="A",
                                       variant="B", mlhs_samples=1000):
         r"""
-        Compute the expected relative loss against all variations. For example,
+        Compute the expected relative lift against all variations. For example,
         given variants "A", "B", "C" and "D", and choosing variant="B",
-        we compute :math:`\mathrm{E}[(\max(A, C, D) - B) / B]`.
+        we compute :math:`\mathrm{E}[(B - \max(A, C, D)) / \max(A, C, D)]`.
 
         Parameters
         ----------
@@ -1023,7 +1023,7 @@ class GammaMVTest(BayesMVTest):
 
         Returns
         -------
-        expected_loss_relative_vs_all : float
+        expected_lift_relative_vs_all : float
         """
         check_mv_method(method=method, method_options=("MC", "MLHS", "quad"),
                         control=None, variant=variant,
@@ -1046,29 +1046,30 @@ class GammaMVTest(BayesMVTest):
 
             return (xvariant / maxall).mean() - 1
         else:
+            # exclude variant
+            variants_without_variant = variants.copy()
+            variants_without_variant.remove(variant)
+
             if method == "quad":
                 n = np.max([self.models[v].ppf(0.99999999) for v in variants])
-
-                # exclude variant
-                variants.remove(variant)
 
                 # prepare parameters
                 variant_params = [(self.models[v].shape_posterior,
                                   self.models[v].rate_posterior)
-                                  for v in variants]
+                                  for v in variants_without_variant]
 
+                # Calculate E[max(X_i)] where X_i are the other variants
                 e_max = integrate.quad(func=func_mv_elr, a=0, b=n, args=(
                     variant_params))[0]
             else:
-                # exclude variant
-                variants.remove(variant)
+                e_max = self._expected_value_max_mlhs(variants_without_variant, mlhs_samples)
 
-                e_max = self._expected_value_max_mlhs(variants, mlhs_samples)
-
+            # Calculate E[X] for the variant
             a = self.models[variant].shape_posterior
             b = self.models[variant].rate_posterior
-            e_x = (a - 1) / b
+            e_x = a / b  # Mean of gamma distribution is a/b
 
+            # Return E[X]/E[max(X_i)] - 1
             return e_x / e_max - 1
 
     def expected_loss_relative_ci(self, method="MC", control="A", variant="B",

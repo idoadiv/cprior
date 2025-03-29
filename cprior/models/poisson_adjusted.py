@@ -22,8 +22,9 @@ class PoissonAdjustedModel(PoissonModel):
         var = np.var(x)
         mean = np.mean(x)
         
+        if n == 0:
+            return
+        
         self._shape_posterior +=(mean**2/var) * n
         self._rate_posterior += (mean/var) * n
         self.n_samples_ += n
-    
-
