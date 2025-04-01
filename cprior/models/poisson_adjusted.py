@@ -24,7 +24,9 @@ class PoissonAdjustedModel(PoissonModel):
         
         if n == 0:
             return
-        
-        self._shape_posterior +=(mean**2/var) * n
-        self._rate_posterior += (mean/var) * n
+
+        # When VAR==0, ie: when all the data is the same, we get div/0, which is. This prevents it
+        if var > 0:
+            self._shape_posterior +=(mean**2/var) * n
+            self._rate_posterior += (mean/var) * n
         self.n_samples_ += n
