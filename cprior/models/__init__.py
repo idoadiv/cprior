@@ -25,6 +25,7 @@ from .negative_binomial import NegativeBinomialMVTest
 from .normal import NormalABTest
 from .normal import NormalModel
 from .normal import NormalMVTest
+from .normal_adjusted import NormalAdjustedModel, NormalAdjustedMVTest
 
 from .poisson import PoissonABTest
 from .poisson import PoissonModel
@@ -57,7 +58,9 @@ __all__ = ['BernoulliABTest',
            'NegativeBinomialMVTest',
            'NormalABTest',
            'NormalModel',
+           'NormalAdjustedModel',
            'NormalMVTest',
+           'NormalAdjustedMVTest',
            'PoissonABTest',
            'PoissonModel',
            'PoissonAdjustedModel',
