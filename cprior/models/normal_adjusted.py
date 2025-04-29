@@ -46,7 +46,7 @@ class NormalAdjustedModel(NormalModel):
         return super().ppf(q=q)[0]
 
 
-class NormalAdjustedTest(NormalMVTest):
+class NormalAdjustedMVTest(NormalMVTest):
     def __init__(self, models, simulations=1000000, random_state=None,
                  n_jobs=None):
         super().__init__(models, simulations, random_state, n_jobs)
@@ -167,7 +167,7 @@ class NormalAdjustedTest(NormalMVTest):
             xall = [p.get() for p in processes]
             maxall = np.maximum.reduce(xall)
 
-            return ((xvariant - maxall) / maxall).mean(axis=0)
+            return ((xvariant - maxall) / maxall).mean(axis=0)[0]
 
         else:
             # prepare parameters
