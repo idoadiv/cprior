@@ -91,6 +91,9 @@ class NormalModel(NormalInverseGammaModel):
         x = np.asarray(data)
         n = x.size
 
+        if n == 0:
+            return
+
         self.n_samples_ += n
         self._x_sum += np.sum(x)
         self._x2_sum += np.sum(x * x)
