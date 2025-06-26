@@ -27,6 +27,10 @@ class PoissonAdjustedModel(PoissonModel):
 
         # When VAR==0, ie: when all the data is the same, we get div/0, which is. This prevents it
         if var > 0:
-            self._shape_posterior +=(mean**2/var) * n
-            self._rate_posterior += (mean/var) * n
+            self._shape_posterior += (mean ** 2 / var) * n
+            self._rate_posterior += (mean / var) * n
+        else:
+            # Fall back to parent class update method when all data is the same
+            self._shape_posterior += np.sum(x)
+            self._rate_posterior += n
         self.n_samples_ += n
