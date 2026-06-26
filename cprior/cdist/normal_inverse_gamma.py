@@ -73,6 +73,21 @@ def func_mv_prob_mean(x, mu, s, v, variant_params):
     return pdf * cdf
 
 
+def func_mv_prob_mean_min(x, mu, s, v, variant_params):
+    """Integrand for P(variant mean is the minimum).
+
+    Mirror of ``func_mv_prob_mean`` using the Student-t survival function
+    (1 - CDF) so the product is P(all other means >= x).
+    """
+    t = (x - mu) / s
+    pdf = np.exp(-0.5 * (1 + v) * np.log(1 + t ** 2 / v)
+                 - 0.5 * np.log(v) - np.log(s) - special.betaln(v * 0.5, 0.5))
+
+    sf = np.prod([1.0 - special.stdtr(2 * a, (x - mu) / np.sqrt(b / a / la))
+                  for (mu, la, a, b) in variant_params], axis=0)
+    return pdf * sf
+
+
 def func_mv_prob_var(x, a, b, variant_params):
     """Integratnd probability integral."""
     pdf = np.exp(a * np.log(b) - (a + 1) * np.log(x) - b / x
@@ -1303,7 +1318,7 @@ class NormalInverseGammaMVTest(BayesMVTest):
             return (x1 > x0 + lift).mean(), (sig21 > sig20 + lift).mean()
 
     def probability_vs_all(self, method="quad", variant="B", lift=0,
-                           mlhs_samples=1000):
+                           mlhs_samples=1000, minimize=False):
         r"""
         Compute the error probability or *chance to beat all* variations. For
         example, given variants "A", "B", "C" and "D", and choosing
@@ -1328,6 +1343,13 @@ class NormalInverseGammaMVTest(BayesMVTest):
         mlhs_samples : int (default=1000)
             Number of samples for MLHS method.
 
+        minimize : bool (default=False)
+            If True compute the *chance the mean is the minimum* instead, i.e.
+            :math:`P[B < \min(A, C, D) - lift]`. Use this for "lower is better"
+            KPIs, where the winning variant has the smallest mean. Only the mean
+            (location) probability is reversed; the variance probability is
+            unaffected.
+
         Returns
         -------
         probability_vs_all : tuple of floats
@@ -1350,8 +1372,12 @@ class NormalInverseGammaMVTest(BayesMVTest):
                          for v in variants]
 
             xall = [p.get() for p in processes]
-            maxall = np.maximum.reduce(xall)
 
+            if minimize:
+                minall = np.minimum.reduce(xall)
+                return (xvariant < minall - lift).mean(axis=0)
+
+            maxall = np.maximum.reduce(xall)
             return (xvariant > maxall + lift).mean(axis=0)
         else:
             # prepare parameters
@@ -1374,8 +1400,10 @@ class NormalInverseGammaMVTest(BayesMVTest):
                 min_t, max_t = stats.t(df=v, loc=mu, scale=s).ppf(
                     [0.00000001, 0.99999999])
 
+                func_mean = func_mv_prob_mean_min if minimize \
+                    else func_mv_prob_mean
                 prob_mean = integrate.quad(
-                    func=func_mv_prob_mean, a=min_t, b=max_t, args=(
+                    func=func_mean, a=min_t, b=max_t, args=(
                         mu, s, v, variant_params))[0]
 
                 # variance
@@ -1393,9 +1421,13 @@ class NormalInverseGammaMVTest(BayesMVTest):
                 # mean
                 x = stats.t(df=2 * a, loc=mu, scale=np.sqrt(b / a / la)).ppf(r)
 
-                prob_mean = np.nanmean(
-                    np.prod([special.stdtr(2*a, (x - mu) / np.sqrt(b / a / la))
-                            for mu, la, a, b in variant_params], axis=0))
+                mean_cdfs = [special.stdtr(2*a, (x - mu) / np.sqrt(b / a / la))
+                             for mu, la, a, b in variant_params]
+                if minimize:
+                    prob_mean = np.nanmean(
+                        np.prod([1.0 - cdf for cdf in mean_cdfs], axis=0))
+                else:
+                    prob_mean = np.nanmean(np.prod(mean_cdfs, axis=0))
 
                 # variance
                 x = stats.invgamma(a=a, scale=b).ppf(r)

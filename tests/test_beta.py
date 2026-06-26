@@ -441,6 +441,43 @@ def test_beta_mv_probability_vs_all():
         method="MC", variant="B") == approx(0.5996839676, rel=1e-1)
 
 
+def test_beta_mv_probability_vs_all_minimize():
+    models = {
+        "A": BetaModel(alpha=40, beta=600),
+        "B": BetaModel(alpha=70, beta=900),
+        "C": BetaModel(alpha=100, beta=1400)
+    }
+
+    mvtest = BetaMVTest(models, 1000000, 42)
+
+    # P(variant is the minimum) - "lower is better" direction
+    assert mvtest.probability_vs_all(
+        method="quad", variant="A", minimize=True) == approx(
+            0.5890749491, rel=1e-8)
+    assert mvtest.probability_vs_all(
+        method="MLHS", variant="A", minimize=True) == approx(
+            0.5890749491, rel=1e-2)
+    assert mvtest.probability_vs_all(
+        method="MC", variant="A", minimize=True) == approx(
+            0.5890749491, rel=1e-1)
+
+    # P(is min) over all variants must sum to 1
+    p_min = [mvtest.probability_vs_all(method="quad", variant=v, minimize=True)
+             for v in models]
+    assert sum(p_min) == approx(1.0, rel=1e-6)
+
+
+def test_beta_mv_probability_vs_all_minimize_two_variants():
+    # For two variants, P(B is min) == 1 - P(B is max) exactly.
+    mvtest = BetaMVTest(
+        {"A": BetaModel(alpha=40, beta=600), "B": BetaModel(alpha=70, beta=900)},
+        1000000, 42)
+
+    p_max = mvtest.probability_vs_all(method="quad", variant="B")
+    p_min = mvtest.probability_vs_all(method="quad", variant="B", minimize=True)
+    assert p_min == approx(1.0 - p_max, rel=1e-6)
+
+
 def test_beta_mv_expected_loss():
     modelA = BetaModel(alpha=40, beta=60)
     modelB = BetaModel(alpha=70, beta=90)

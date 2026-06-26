@@ -54,6 +54,17 @@ def func_mv_prob(x, a, b, variant_params):
     return np.exp(pdf) * g
 
 
+def func_mv_prob_min(x, a, b, variant_params):
+    """Integrand for P(variant is the minimum).
+
+    Mirror of ``func_mv_prob`` using the survival function (1 - CDF) so the
+    product is P(all others >= x) instead of P(all others <= x).
+    """
+    pdf = (a - 1) * np.log(x) + (b - 1) * np.log(1 - x) - special.betaln(a, b)
+    g = np.prod([1.0 - special.betainc(a, b, x) for a, b in variant_params], axis=0)
+    return np.exp(pdf) * g
+
+
 def func_mv_el(x, a, b, variant_params):
     """Integrand expected loss integral."""
     n = len(variant_params)
@@ -744,7 +755,7 @@ class BetaMVTest(BayesMVTest):
             return (x1 > x0 + lift).mean()
 
     def probability_vs_all(self, method="quad", variant="B", lift=0,
-                           mlhs_samples=1000):
+                           mlhs_samples=1000, minimize=False):
         r"""
         Compute the error probability or *chance to beat all* variations. For
         example, given variants "A", "B", "C" and "D", and choosing
@@ -769,6 +780,12 @@ class BetaMVTest(BayesMVTest):
         mlhs_samples : int (default=1000)
             Number of samples for MLHS method.
 
+        minimize : bool (default=False)
+            If True compute the *chance to be the minimum* instead, i.e.
+            :math:`P[B < \min(A, C, D) - lift]`. Use this for "lower is better"
+            KPIs (e.g. churn / cancellation rate), where the winning variant is
+            the smallest rather than the largest.
+
         Returns
         -------
         probability_vs_all : float
@@ -790,8 +807,12 @@ class BetaMVTest(BayesMVTest):
             processes = [pool.apply_async(self._rvs, args=(v, ))
                          for v in variants]
             xall = [p.get() for p in processes]
-            maxall = np.maximum.reduce(xall)
 
+            if minimize:
+                minall = np.minimum.reduce(xall)
+                return (xvariant < minall - lift).mean()
+
+            maxall = np.maximum.reduce(xall)
             return (xvariant > maxall + lift).mean()
         elif method == "quad":
             # prepare parameters
@@ -803,7 +824,8 @@ class BetaMVTest(BayesMVTest):
 
             points = get_integration_points(a, b)
 
-            return integrate.quad(func=func_mv_prob, a=0, b=1, points=points, args=(
+            func = func_mv_prob_min if minimize else func_mv_prob
+            return integrate.quad(func=func, a=0, b=1, points=points, args=(
                 a, b, variant_params))[0]
         else:
             # prepare parameters
@@ -815,8 +837,10 @@ class BetaMVTest(BayesMVTest):
             v = (r - 0.5) / mlhs_samples
             x = self.models[variant].ppf(v)
 
-            return np.mean(np.prod([special.betainc(a, b, x)
-                           for a, b in variant_params], axis=0))
+            cdfs = [special.betainc(a, b, x) for a, b in variant_params]
+            if minimize:
+                return np.mean(np.prod([1.0 - cdf for cdf in cdfs], axis=0))
+            return np.mean(np.prod(cdfs, axis=0))
 
     def expected_loss(self, method="exact", control="A", variant="B", lift=0,
                       mlhs_samples=10000):
