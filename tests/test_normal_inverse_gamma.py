@@ -391,6 +391,40 @@ def test_normal_inverse_gamma_mv_probability_vs_all():
         (0.1703097379, 0.9576994541), rel=1e-1)
 
 
+def test_normal_inverse_gamma_mv_probability_vs_all_minimize():
+    models = {
+        "A": NormalInverseGammaModel(loc=5.5, variance_scale=3, shape=14,
+                                     scale=5),
+        "B": NormalInverseGammaModel(loc=6.0, variance_scale=4, shape=12,
+                                     scale=9),
+        "C": NormalInverseGammaModel(loc=6.5, variance_scale=4, shape=13,
+                                     scale=4)
+    }
+
+    mvtest = NormalInverseGammaMVTest(models, 1000000)
+
+    # P(mean is the minimum) - "lower is better" direction. A has the smallest
+    # loc (5.5) so it is most likely to have the minimum mean. Only the mean
+    # (first element) is reversed; the variance probability is unchanged.
+    mean_min, var = mvtest.probability_vs_all(
+        method="quad", variant="A", minimize=True)
+    assert mean_min == approx(0.8048234320, rel=1e-8)
+
+    assert mvtest.probability_vs_all(
+        method="MLHS", variant="A", minimize=True)[0] == approx(
+            0.8048234320, rel=1e-2)
+
+    # variance probability is identical with and without minimize
+    assert mvtest.probability_vs_all(method="quad", variant="B")[1] == approx(
+        mvtest.probability_vs_all(
+            method="quad", variant="B", minimize=True)[1], rel=1e-8)
+
+    # P(mean is min) over all variants sums to 1
+    p_min_mean = [mvtest.probability_vs_all(
+        method="quad", variant=v, minimize=True)[0] for v in models]
+    assert sum(p_min_mean) == approx(1.0, rel=1e-6)
+
+
 def test_normal_inverse_gamma_mv_expected_loss():
     modelA = NormalInverseGammaModel(loc=5.5, variance_scale=3, shape=14,
                                      scale=5)

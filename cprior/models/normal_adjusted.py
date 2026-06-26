@@ -230,7 +230,8 @@ class NormalAdjustedMVTest(NormalMVTest):
                 return elr_mean
 
     def probability_vs_all(
-            self, method: str = "quad", variant: str = "B", lift: float = 0, mlhs_samples: int = 1000
+            self, method: str = "quad", variant: str = "B", lift: float = 0, mlhs_samples: int = 1000,
+            minimize: bool = False
     ) -> float:
         """
         Compute the probability of a variant outperforming all other variants by a given lift.
@@ -246,13 +247,17 @@ class NormalAdjustedMVTest(NormalMVTest):
             The amount of uplift.
         mlhs_samples : int, optional (default=1000)
             Number of samples for MLHS method.
+        minimize : bool, optional (default=False)
+            If True compute the chance the variant mean is the *minimum* of all
+            variants. Use this for "lower is better" KPIs.
 
         Returns
         -------
         float
             The probability of the variant outperforming all other variants by the given lift.
         """
-        return super().probability_vs_all(method=method, variant=variant, lift=lift, mlhs_samples=mlhs_samples)[0]
+        return super().probability_vs_all(method=method, variant=variant, lift=lift,
+                                           mlhs_samples=mlhs_samples, minimize=minimize)[0]
 
     def expected_loss_vs_all(
             self, method: str = "quad", variant: str = "B", lift: float = 0, mlhs_samples: int = 1000

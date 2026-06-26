@@ -251,6 +251,40 @@ def test_gamma_mv_probability_vs_all():
         method="MC", variant="B") == approx(0.1969431392, rel=1e-1)
 
 
+def test_gamma_mv_probability_vs_all_minimize():
+    models = {
+        "A": GammaModel(shape=25, rate=10000),
+        "B": GammaModel(shape=30, rate=10000),
+        "C": GammaModel(shape=40, rate=11000)
+    }
+
+    mvtest = GammaMVTest(models, 1000000, 42)
+
+    # P(variant is the minimum) - "lower is better" direction. A has the
+    # smallest mean (25/10000) so it is most likely to be the minimum.
+    assert mvtest.probability_vs_all(
+        method="quad", variant="A", minimize=True) == approx(
+            0.7288992798, rel=1e-8)
+    assert mvtest.probability_vs_all(
+        method="MLHS", variant="A", minimize=True) == approx(
+            0.7288992798, rel=1e-2)
+
+    p_min = [mvtest.probability_vs_all(method="quad", variant=v, minimize=True)
+             for v in models]
+    assert sum(p_min) == approx(1.0, rel=1e-6)
+
+
+def test_gamma_mv_probability_vs_all_minimize_two_variants():
+    # For two variants, P(B is min) == 1 - P(B is max) exactly.
+    mvtest = GammaMVTest(
+        {"A": GammaModel(shape=25, rate=10000),
+         "B": GammaModel(shape=30, rate=10000)}, 1000000, 42)
+
+    p_max = mvtest.probability_vs_all(method="quad", variant="B")
+    p_min = mvtest.probability_vs_all(method="quad", variant="B", minimize=True)
+    assert p_min == approx(1.0 - p_max, rel=1e-6)
+
+
 def test_gamma_mv_expected_loss():
     modelA = GammaModel(shape=2500, rate=1000000)
     modelB = GammaModel(shape=3000, rate=1000000)
