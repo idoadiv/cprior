@@ -260,7 +260,8 @@ class NormalAdjustedMVTest(NormalMVTest):
                                            mlhs_samples=mlhs_samples, minimize=minimize)[0]
 
     def expected_loss_vs_all(
-            self, method: str = "quad", variant: str = "B", lift: float = 0, mlhs_samples: int = 1000
+            self, method: str = "quad", variant: str = "B", lift: float = 0, mlhs_samples: int = 1000,
+            minimize: bool = False
     ) -> float:
         """
         Compute the expected loss of a variant against all other variants.
@@ -276,13 +277,17 @@ class NormalAdjustedMVTest(NormalMVTest):
             The amount of uplift.
         mlhs_samples : int, optional (default=1000)
             Number of samples for MLHS method.
+        minimize : bool, optional (default=False)
+            If True compute the loss against the minimum of all variants (mean
+            direction reversed) — for "lower is better" KPIs.
 
         Returns
         -------
         float
             The expected loss of the variant against all other variants.
         """
-        return super().expected_loss_vs_all(method=method, variant=variant, lift=lift, mlhs_samples=mlhs_samples)[0]
+        return super().expected_loss_vs_all(method=method, variant=variant, lift=lift,
+                                            mlhs_samples=mlhs_samples, minimize=minimize)[0]
 
     def expected_loss(
             self, method: str = "exact", control: str = "A", variant: str = "B", lift: float = 0

@@ -478,6 +478,22 @@ def test_beta_mv_probability_vs_all_minimize_two_variants():
     assert p_min == approx(1.0 - p_max, rel=1e-6)
 
 
+def test_beta_mv_expected_loss_vs_all_minimize():
+    mvtest = BetaMVTest(
+        {"A": BetaModel(alpha=40, beta=600), "B": BetaModel(alpha=70, beta=900)},
+        1000000, 42)
+
+    # Loss vs the minimum for B == pairwise E[max(B - A, 0)] for two variants.
+    el_min = mvtest.expected_loss_vs_all(method="quad", variant="B", minimize=True)
+    pairwise = mvtest.expected_loss(method="exact", control="B", variant="A")
+    assert el_min == approx(pairwise, rel=1e-6)
+    assert el_min == approx(
+        mvtest.expected_loss_vs_all(method="MC", variant="B", minimize=True), rel=1e-1)
+
+    with raises(NotImplementedError):
+        mvtest.expected_loss_vs_all(method="MLHS", variant="B", minimize=True)
+
+
 def test_beta_mv_expected_loss():
     modelA = BetaModel(alpha=40, beta=60)
     modelB = BetaModel(alpha=70, beta=90)

@@ -121,6 +121,35 @@ def func_mv_el_mean(x, mu, s, v, variant_params):
     return ((x - mu) * special.stdtr(v, t) - c) * pdf
 
 
+def func_mv_el_mean_min(x, mu, s, v, variant_params):
+    """Integrand expected (mean) loss for the *minimum* direction.
+
+    Mirror of ``func_mv_el_mean``: the others' product uses the Student-t
+    survival (density of the MIN of the others) and the loss term uses
+    E[max(V - x, 0)] = E[max(x - V, 0)] + (E[V] - x), with E[V] = mu.
+    """
+    n = len(variant_params)
+
+    uu, ll, aa, bb = map(np.array, zip(*variant_params))
+
+    vv = 2 * aa
+    ss = np.sqrt(bb / aa / ll)
+    tt = (x - uu) / ss
+
+    pdf = np.exp(-0.5 * (1 + vv) * np.log(1 + tt ** 2 / vv) - 0.5 * np.log(vv)
+                 - np.log(ss) - special.betaln(vv * 0.5, 0.5))
+
+    pdf = np.dot(pdf, [np.prod([1.0 - special.stdtr(vv[j], tt[j])
+                       for j in range(n) if j != i], axis=0)
+                       for i in range(n)])
+
+    t = (x - mu) / s
+    c = s * np.exp(0.5 * (1 - v) * np.log(1 + t ** 2 / v) + 0.5 * np.log(v)
+                   - special.betaln(v * 0.5, 0.5)) / (1 - v)
+
+    return ((x - mu) * special.stdtr(v, t) - c + (mu - x)) * pdf
+
+
 def func_mv_el_var(x, a, b, variant_params):
     """Integrand expected loss integral."""
     n = len(variant_params)
@@ -1877,7 +1906,7 @@ class NormalInverseGammaMVTest(BayesMVTest):
                     [ppfl_var - 1, ppfu_var - 1])
 
     def expected_loss_vs_all(self, method="quad", variant="B", lift=0,
-                             mlhs_samples=1000):
+                             mlhs_samples=1000, minimize=False):
         r"""
         Compute the expected loss against all variations. For example, given
         variants "A", "B", "C" and "D", and choosing variant="B", we compute
@@ -1902,6 +1931,12 @@ class NormalInverseGammaMVTest(BayesMVTest):
         mlhs_samples : int (default=1000)
             Number of samples for MLHS method.
 
+        minimize : bool (default=False)
+            If True compute the loss against the *minimum* of all variations
+            (mean direction reversed) — the expected loss for "lower is better"
+            KPIs. Only the mean is reversed; the variance loss is unchanged.
+            Only "MC" and "quad" are supported.
+
         Returns
         -------
         expected_loss_vs_all : tuple of floats
@@ -1909,6 +1944,9 @@ class NormalInverseGammaMVTest(BayesMVTest):
         check_mv_method(method=method, method_options=("MC", "MLHS", "quad"),
                         control=None, variant=variant,
                         variants=self.models.keys(), lift=lift)
+        if minimize and method == "MLHS":
+            raise NotImplementedError(
+                "expected_loss_vs_all(minimize=True) supports method='quad'/'MC'")
 
         variants = list(self.models.keys())
 
@@ -1924,8 +1962,12 @@ class NormalInverseGammaMVTest(BayesMVTest):
             processes = [pool.apply_async(self._rvs, args=(v, ))
                          for v in variants]
             xall = [p.get() for p in processes]
-            maxall = np.maximum.reduce(xall)
 
+            if minimize:
+                minall = np.minimum.reduce(xall)
+                return np.maximum(xvariant - minall - lift, 0).mean(axis=0)
+
+            maxall = np.maximum.reduce(xall)
             return np.maximum(maxall - xvariant - lift, 0).mean(axis=0)
         else:
             max_ig = np.max([stats.invgamma(
@@ -1965,8 +2007,9 @@ class NormalInverseGammaMVTest(BayesMVTest):
 
             if method == "quad":
                 # mean
+                func_mean = func_mv_el_mean_min if minimize else func_mv_el_mean
                 el_mean = integrate.quad(
-                    func=func_mv_el_mean, a=min_t, b=max_t, args=(
+                    func=func_mean, a=min_t, b=max_t, args=(
                         mu, s, v, variant_params))[0]
 
                 # variance
