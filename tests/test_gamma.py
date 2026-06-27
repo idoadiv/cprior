@@ -285,6 +285,20 @@ def test_gamma_mv_probability_vs_all_minimize_two_variants():
     assert p_min == approx(1.0 - p_max, rel=1e-6)
 
 
+def test_gamma_mv_expected_loss_vs_all_minimize():
+    mvtest = GammaMVTest(
+        {"A": GammaModel(shape=25, rate=10000), "B": GammaModel(shape=30, rate=10000)},
+        1000000, 42)
+
+    # Loss vs the minimum for B == pairwise E[max(B - A, 0)] for two variants.
+    el_min = mvtest.expected_loss_vs_all(method="quad", variant="B", minimize=True)
+    pairwise = mvtest.expected_loss(method="exact", control="B", variant="A")
+    assert el_min == approx(pairwise, rel=1e-4)
+
+    with raises(NotImplementedError):
+        mvtest.expected_loss_vs_all(method="MLHS", variant="B", minimize=True)
+
+
 def test_gamma_mv_expected_loss():
     modelA = GammaModel(shape=2500, rate=1000000)
     modelB = GammaModel(shape=3000, rate=1000000)

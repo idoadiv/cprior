@@ -425,6 +425,23 @@ def test_normal_inverse_gamma_mv_probability_vs_all_minimize():
     assert sum(p_min_mean) == approx(1.0, rel=1e-6)
 
 
+def test_normal_inverse_gamma_mv_expected_loss_vs_all_minimize():
+    models = {
+        "A": NormalInverseGammaModel(loc=5.5, variance_scale=3, shape=14, scale=5),
+        "B": NormalInverseGammaModel(loc=6.0, variance_scale=4, shape=12, scale=9),
+    }
+    mvtest = NormalInverseGammaMVTest(models, 1000000)
+
+    # Mean loss vs the minimum for B == pairwise mean E[max(B - A, 0)].
+    el_min_mean = mvtest.expected_loss_vs_all(
+        method="quad", variant="B", minimize=True)[0]
+    pairwise_mean = mvtest.expected_loss(method="exact", control="B", variant="A")[0]
+    assert el_min_mean == approx(pairwise_mean, rel=1e-4)
+
+    with raises(NotImplementedError):
+        mvtest.expected_loss_vs_all(method="MLHS", variant="B", minimize=True)
+
+
 def test_normal_inverse_gamma_mv_expected_loss():
     modelA = NormalInverseGammaModel(loc=5.5, variance_scale=3, shape=14,
                                      scale=5)

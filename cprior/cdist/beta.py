@@ -82,6 +82,29 @@ def func_mv_el(x, a, b, variant_params):
     return s * (p - q)
 
 
+def func_mv_el_min(x, a, b, variant_params):
+    """Integrand expected loss integral for the *minimum* direction.
+
+    Mirror of ``func_mv_el``: the others' product uses the survival function
+    (so it is the density of the MIN of the others), and the per-variant loss
+    term uses E[max(V - x, 0)] = E[max(x - V, 0)] + (E[V] - x).
+    """
+    n = len(variant_params)
+
+    aa, bb = map(np.array, zip(*variant_params))
+
+    pdf = np.exp((aa - 1) * np.log(x) + (bb - 1) * np.log(1 - x)
+                 - special.betaln(aa, bb))
+
+    s = np.dot(pdf, [np.prod([1.0 - special.betainc(aa[j], bb[j], x)
+               for j in range(n) if j != i], axis=0) for i in range(n)])
+
+    p = x * special.betainc(a, b, x)
+    q = a / (a + b) * special.betainc(a + 1, b, x)
+    mean_v = a / (a + b)
+    return s * (p - q + mean_v - x)
+
+
 def func_mv_elr(x, variant_params):
     """Integrand expected loss relative integral."""
     n = len(variant_params)
@@ -1219,7 +1242,7 @@ class BetaMVTest(BayesMVTest):
                 return ppfl - 1, ppfu - 1
 
     def expected_loss_vs_all(self, method="quad", variant="B", lift=0,
-                             mlhs_samples=1000):
+                             mlhs_samples=1000, minimize=False):
         r"""
         Compute the expected loss against all variations. For example, given
         variants "A", "B", "C" and "D", and choosing variant="B", we compute
@@ -1244,6 +1267,11 @@ class BetaMVTest(BayesMVTest):
         mlhs_samples : int (default=1000)
             Number of samples for MLHS method.
 
+        minimize : bool (default=False)
+            If True compute the loss against the *minimum* of all variations,
+            :math:`\mathrm{E}[\max(B - \min(A, C, D), 0)]` — the expected loss
+            for "lower is better" KPIs. Only "MC" and "quad" are supported.
+
         Returns
         -------
         expected_loss_vs_all : float
@@ -1251,6 +1279,9 @@ class BetaMVTest(BayesMVTest):
         check_mv_method(method=method, method_options=("MC", "MLHS", "quad"),
                         control=None, variant=variant,
                         variants=self.models.keys(), lift=lift)
+        if minimize and method == "MLHS":
+            raise NotImplementedError(
+                "expected_loss_vs_all(minimize=True) supports method='quad'/'MC'")
 
         # exclude variant
         variants = list(self.models.keys())
@@ -1265,8 +1296,12 @@ class BetaMVTest(BayesMVTest):
             processes = [pool.apply_async(self._rvs, args=(v, ))
                          for v in variants]
             xall = [p.get() for p in processes]
-            maxall = np.maximum.reduce(xall)
 
+            if minimize:
+                minall = np.minimum.reduce(xall)
+                return np.maximum(xvariant - minall - lift, 0).mean()
+
+            maxall = np.maximum.reduce(xall)
             return np.maximum(maxall - xvariant - lift, 0).mean()
         else:
             variant_params = [(self.models[v].alpha_posterior,
@@ -1277,7 +1312,8 @@ class BetaMVTest(BayesMVTest):
 
             if method == "quad":
                 points = get_integration_points(a, b)
-                return integrate.quad(func=func_mv_el, a=0, b=1, points=points, args=(
+                func = func_mv_el_min if minimize else func_mv_el
+                return integrate.quad(func=func, a=0, b=1, points=points, args=(
                     a, b, variant_params))[0]
 
             else:
