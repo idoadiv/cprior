@@ -77,10 +77,13 @@ class NormalAdjustedMVTest(NormalMVTest):
 
     def expected_lift_relative(self, method="exact", control="A", variant="B"):
         r"""
-        Compute expected relative lift for choosing a variant.
+        Compute expected relative lift of the tested variant over the control,
+        i.e. :math:`\mathrm{E}[(variant - control) / control]`.
 
-        * If ``variant == "A"``, :math:`\mathrm{E}[(B - A) / A]`
-        * If ``variant == "B"``, :math:`\mathrm{E}[(A - B) / B]`
+        A positive value means the variant is above the control. This matches
+        the orientation of ``BetaMVTest.expected_lift_relative`` and
+        ``GammaMVTest.expected_lift_relative``; the direction is set by the
+        ``control``/``variant`` arguments, not by the variant names.
 
         Parameters
         ----------
@@ -102,16 +105,10 @@ class NormalAdjustedMVTest(NormalMVTest):
                         variants=self.models.keys())
 
         if method == "exact":
-            model_control = self.models[control]
-            model_variant = self.models[variant]
+            mu_control = self.models[control].loc_posterior
+            mu_variant = self.models[variant].loc_posterior
 
-            mu_control = model_control.loc_posterior
-            mu_variant = model_variant.loc_posterior
-
-            if variant == "A":
-                return (mu_variant - mu_control) / mu_control
-            else:
-                return (mu_control - mu_variant) / mu_variant
+            return (mu_variant - mu_control) / mu_control
         else:  # Monte Carlo method
             data_control = self.models[control].rvs(self.simulations, self.random_state)
             data_variant = self.models[variant].rvs(self.simulations, self.random_state)
@@ -119,10 +116,7 @@ class NormalAdjustedMVTest(NormalMVTest):
             x_control = data_control[:, 0]
             x_variant = data_variant[:, 0]
 
-            if variant == "A":
-                return ((x_variant - x_control) / x_control).mean()
-            else:
-                return ((x_control - x_variant) / x_variant).mean()
+            return ((x_variant - x_control) / x_control).mean()
 
     def expected_lift_relative_vs_all(self, method="quad", control="A",
                                       variant="B", mlhs_samples=1000):
@@ -199,9 +193,7 @@ class NormalAdjustedMVTest(NormalMVTest):
                 e_max = integrate.quad(func=func_mv_elr_mean, a=min_t,
                                        b=max_t, args=(variant_params))[0]
 
-                e_inv_x = (1 + self.models[variant].var()[0] / mu ** 2) / mu
-
-                elr_mean = 1 - (e_max * e_inv_x)
+                elr_mean = mu / e_max - 1
 
                 return elr_mean
 
@@ -219,13 +211,14 @@ class NormalAdjustedMVTest(NormalMVTest):
 
                 # mean
                 xx = stats.t(df=vv, loc=uu, scale=ss).ppf(r)
-                xr = (1. / xx[:, -1]).mean()
 
-                elr_mean = 1 - (np.sum(
+                e_max = np.sum(
                     xx[:, :-1].T * [np.prod([
                         special.stdtr(vv[j], (xx[:, i] - uu[j]) / ss[j])
                         for j in range(n) if j != i],
-                        axis=0) for i in range(n)], axis=0).mean() * xr)
+                        axis=0) for i in range(n)], axis=0).mean()
+
+                elr_mean = mu / e_max - 1
 
                 return elr_mean
 
