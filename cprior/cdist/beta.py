@@ -1055,7 +1055,7 @@ class BetaMVTest(BayesMVTest):
             a1 = model_variant.alpha_posterior
             b1 = model_variant.beta_posterior
 
-            return (a0 + b0) * (a1 - 1) / a0 / (a1 + b1 - 1) - 1
+            return a1 / (a1 + b1) * (a0 + b0) / a0 - 1
         else:
             x0 = model_control.rvs(self.simulations, self.random_state)
             x1 = model_variant.rvs(self.simulations, self.random_state)
@@ -1155,14 +1155,17 @@ class BetaMVTest(BayesMVTest):
                                   self.models[v].beta_posterior)
                                   for v in variants]
 
-                e_max = integrate.quad(func=func_mv_elr, a=0, b=1, args=(
-                    variant_params))[0]
+                points = [p for params in variant_params
+                          for p in get_integration_points(*params) or []]
+                e_max = integrate.quad(func=func_mv_elr, a=0, b=1,
+                                       points=points or None,
+                                       args=(variant_params))[0]
             else:
                 e_max = self._expected_value_max_mlhs(variants, mlhs_samples)
 
             a = self.models[variant].alpha_posterior
             b = self.models[variant].beta_posterior
-            e_x = (a - 1) / (a + b - 1)
+            e_x = a / (a + b)
 
             return (e_x / e_max) - 1
 
